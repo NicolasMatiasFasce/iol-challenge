@@ -74,9 +74,9 @@ class RateLimiterProxyControllerTest {
         request.setQueryString("status=active");
         request.addHeader("X-Api-Key", "client-a");
         request.addHeader("Content-Type", "application/json");
-        byte[] body = "{\"a\":1}".getBytes(StandardCharsets.UTF_8);
+        request.setContent("{\"a\":1}".getBytes(StandardCharsets.UTF_8));
 
-        ResponseEntity<byte[]> response = controller.proxy(request, body);
+        ResponseEntity<byte[]> response = controller.proxy(request);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertArrayEquals("upstream-ok".getBytes(StandardCharsets.UTF_8), response.getBody());
@@ -112,7 +112,7 @@ class RateLimiterProxyControllerTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rl/orders/1");
         request.addHeader("X-Api-Key", "client-b");
 
-        ResponseEntity<byte[]> response = controller.proxy(request, null);
+        ResponseEntity<byte[]> response = controller.proxy(request);
 
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.getStatusCode());
         assertEquals("20", response.getHeaders().getFirst("X-RateLimit-Limit"));
@@ -155,8 +155,8 @@ class RateLimiterProxyControllerTest {
             MockHttpServletRequest ordersRequest = new MockHttpServletRequest("GET", "/rl/orders/1");
             ordersRequest.addHeader("X-Api-Key", "shared-client");
 
-            ResponseEntity<byte[]> usersResponse = controller.proxy(usersRequest, null);
-            ResponseEntity<byte[]> ordersResponse = controller.proxy(ordersRequest, null);
+            ResponseEntity<byte[]> usersResponse = controller.proxy(usersRequest);
+            ResponseEntity<byte[]> ordersResponse = controller.proxy(ordersRequest);
 
             assertEquals(HttpStatus.OK, usersResponse.getStatusCode());
             assertEquals(HttpStatus.OK, ordersResponse.getStatusCode());
@@ -195,8 +195,8 @@ class RateLimiterProxyControllerTest {
         MockHttpServletRequest ordersRequest = new MockHttpServletRequest("GET", "/rl/orders/1");
         ordersRequest.addHeader("X-Api-Key", "shared-client");
 
-        controller.proxy(usersRequest, null);
-        controller.proxy(ordersRequest, null);
+        controller.proxy(usersRequest);
+        controller.proxy(ordersRequest);
 
         verify(decisionService, times(1)).evaluate(eq("shared-client:GET:/users/{id}"), eq(usersPolicy));
         verify(decisionService, times(1)).evaluate(eq("shared-client:GET:/orders/{id}"), eq(ordersPolicy));

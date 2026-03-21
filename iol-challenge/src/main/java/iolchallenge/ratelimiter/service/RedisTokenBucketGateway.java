@@ -3,6 +3,8 @@ package iolchallenge.ratelimiter.service;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -10,6 +12,8 @@ import java.util.List;
 
 @Component
 public class RedisTokenBucketGateway implements TokenBucketGateway {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RedisTokenBucketGateway.class);
 
     private static final String LUA_SCRIPT = """
         local capacity = tonumber(ARGV[1])
@@ -71,12 +75,17 @@ public class RedisTokenBucketGateway implements TokenBucketGateway {
             String.valueOf(Instant.now().toEpochMilli()));
 
         if (result == null || result.size() < 3) {
+            LOGGER.error("Invalid Redis Lua response key={} result={}", key, result);
             throw new IllegalStateException("Invalid Redis Lua response for token bucket");
         }
 
         boolean allowed = parseLong(result.get(0)) == 1L;
         int remaining = Math.max(0, (int) parseLong(result.get(1)));
         long retryAfterSeconds = Math.max(0, parseLong(result.get(2)));
+
+        LOGGER.debug("Token bucket consume key={} allowed={} remaining={} retryAfterSeconds={} capacity={} refillRatePerSecond={}",
+            key, allowed, remaining, retryAfterSeconds, capacity, refillRatePerSecond);
+
         return new TokenBucketResult(allowed, remaining, retryAfterSeconds);
     }
 

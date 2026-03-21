@@ -8,10 +8,11 @@ import iolchallenge.ratelimiter.service.RateLimitDecisionService;
 import iolchallenge.ratelimiter.service.RateLimitRulesStore;
 import iolchallenge.ratelimiter.service.RouteNormalizer;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -29,6 +30,8 @@ import java.util.List;
 @RestController
 @RequestMapping("${rate-limiter.endpoint-prefix:/rl}")
 public class RateLimiterProxyController {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RateLimiterProxyController.class);
 
     private final HttpClient httpClient;
     private final RateLimiterProperties properties;
@@ -60,16 +63,26 @@ public class RateLimiterProxyController {
      * Punto unico de entrada del middleware: decide cuota y luego reenvia o responde 429.
      */
     @RequestMapping("/**")
-    public ResponseEntity<byte[]> proxy(HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+    public ResponseEntity<byte[]> proxy(HttpServletRequest request) {
         String forwardedPath = extractForwardedPath(request);
         String normalizedRoute = routeNormalizer.normalize(forwardedPath);
+
+        LOGGER.debug("Rate limiter request received method={} rawPath={} normalizedRoute={}",
+            request.getMethod(), request.getRequestURI(), normalizedRoute);
 
         RateLimitPolicy policy = rulesStore.resolve(request.getMethod(), normalizedRoute);
         String identity = identityExtractor.extract(request, policy.identityHeader());
         String quotaKey = identity + ":" + request.getMethod().toUpperCase() + ":" + normalizedRoute;
 
+        LOGGER.debug("Rate limiter policy resolved method={} route={} upstream={} capacity={} refill={} identityHeader={} failMode={}",
+            policy.method(), policy.route(), policy.upstreamUrl(), policy.capacity(), policy.refillRatePerSecond(),
+            policy.identityHeader(), policy.failMode());
+
         RateLimitDecision decision = decisionService.evaluate(quotaKey, policy);
         if (!decision.allowed()) {
+            LOGGER.debug("Request throttled identity={} method={} route={} limit={} remaining={} retryAfterSeconds={} degraded={}",
+                identity, request.getMethod(), normalizedRoute, decision.limit(), decision.remaining(),
+                decision.retryAfterSeconds(), decision.degraded());
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header("X-RateLimit-Limit", String.valueOf(decision.limit()))
                 .header("X-RateLimit-Remaining", String.valueOf(decision.remaining()))
@@ -77,27 +90,31 @@ public class RateLimiterProxyController {
                 .body(new byte[0]);
         }
 
-        return forward(request, body, policy.upstreamUrl(), forwardedPath);
+        LOGGER.debug("Request allowed identity={} method={} route={} remaining={} degraded={}",
+            identity, request.getMethod(), normalizedRoute, decision.remaining(), decision.degraded());
+
+        return forward(request, policy.upstreamUrl(), forwardedPath);
     }
 
     /**
      * Reenvia la request al upstream preservando metodo, payload y headers relevantes.
      */
-    private ResponseEntity<byte[]> forward(HttpServletRequest request, byte[] body, String upstreamUrl, String forwardedPath) {
+    private ResponseEntity<byte[]> forward(HttpServletRequest request, String upstreamUrl, String forwardedPath) {
         URI upstreamUri = buildTargetUri(upstreamUrl, forwardedPath, request.getQueryString());
 
         HttpRequest.Builder builder = HttpRequest.newBuilder().uri(upstreamUri);
         copyRequestHeaders(request, builder);
 
-        byte[] payload = body == null ? new byte[0] : body;
-        HttpRequest.BodyPublisher publisher = payload.length == 0
-            ? HttpRequest.BodyPublishers.noBody()
-            : HttpRequest.BodyPublishers.ofByteArray(payload);
-
-        builder.method(request.getMethod(), publisher);
-
         try {
+            byte[] payload = request.getInputStream().readAllBytes();
+            HttpRequest.BodyPublisher publisher = payload.length == 0
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofByteArray(payload);
+
+            builder.method(request.getMethod(), publisher);
+
             HttpResponse<byte[]> upstreamResponse = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+            LOGGER.debug("Upstream response method={} target={} status={}", request.getMethod(), upstreamUri, upstreamResponse.statusCode());
             ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.status(upstreamResponse.statusCode());
             copyResponseHeaders(upstreamResponse, responseBuilder);
             return responseBuilder.body(upstreamResponse.body());
@@ -105,6 +122,7 @@ public class RateLimiterProxyController {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
+            LOGGER.error("Upstream forward failed method={} target={} message={}", request.getMethod(), upstreamUri, e.getMessage(), e);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Upstream forward failed", e);
         }
     }

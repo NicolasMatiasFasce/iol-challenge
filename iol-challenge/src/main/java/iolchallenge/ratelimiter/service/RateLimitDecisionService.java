@@ -6,10 +6,14 @@ import iolchallenge.ratelimiter.config.RateLimiterProperties;
 import iolchallenge.ratelimiter.model.FailMode;
 import iolchallenge.ratelimiter.model.RateLimitDecision;
 import iolchallenge.ratelimiter.model.RateLimitPolicy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RateLimitDecisionService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitDecisionService.class);
 
     private final RateLimiterProperties properties;
     private final TokenBucketGateway tokenBucketGateway;
@@ -38,6 +42,7 @@ public class RateLimitDecisionService {
      */
     public RateLimitDecision evaluate(String quotaKey, RateLimitPolicy policy) {
         if (!properties.enabled()) {
+            LOGGER.debug("Rate limiter bypass enabled=false quotaKey={}", quotaKey);
             allowedCounter.increment();
             return new RateLimitDecision(true, policy.capacity(), policy.capacity(), 0, false);
         }
@@ -58,10 +63,12 @@ public class RateLimitDecisionService {
                 false);
         } catch (RuntimeException ex) {
             if (policy.failMode() == FailMode.FAIL_OPEN) {
+                LOGGER.warn("Rate limiter degraded fail-open quotaKey={} message={}", quotaKey, ex.getMessage());
                 allowedCounter.increment();
                 return new RateLimitDecision(true, policy.capacity(), policy.capacity(), 0, true);
             }
 
+            LOGGER.warn("Rate limiter degraded fail-closed quotaKey={} message={}", quotaKey, ex.getMessage());
             limitedCounter.increment();
             return new RateLimitDecision(false, policy.capacity(), 0, 1, true);
         }

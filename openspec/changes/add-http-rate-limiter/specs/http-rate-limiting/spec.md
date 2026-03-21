@@ -1,133 +1,133 @@
 ## ADDED Requirements
 
 ### Requirement: The service SHALL act as an HTTP intermediary rate limiter
-El sistema SHALL operar en el medio del trafico HTTP entre cliente y API upstream, evaluando cada request antes del forwarding.
+The system SHALL operate in the middle of HTTP traffic between client and upstream API, evaluating each request before forwarding.
 
 #### Scenario: Request permitida y reenviada
-- **WHEN** llega una request y la politica de rate limiting permite su ejecucion
-- **THEN** el sistema reenvia la request al upstream configurado y retorna su respuesta
+- **WHEN** a request arrives and the rate-limiting policy allows execution
+- **THEN** the system forwards the request to the configured upstream and returns its response
 
 #### Scenario: Request rechazada por limite
-- **WHEN** llega una request y la politica de rate limiting no permite su ejecucion
-- **THEN** el sistema responde `429 Too Many Requests` sin reenviar al upstream
+- **WHEN** a request arrives and the rate-limiting policy does not allow execution
+- **THEN** the system responds with `429 Too Many Requests` without forwarding upstream
 
 ### Requirement: Rate limiting SHALL be server-agnostic
-El sistema SHALL aplicar las mismas reglas de limitacion independientemente del tipo de API server de destino.
+The system SHALL apply the same limiting rules regardless of the destination API server type.
 
 #### Scenario: Integracion con multiples upstreams
-- **WHEN** existen dos o mas API servers de destino con tecnologias diferentes
-- **THEN** el sistema aplica politicas de rate limiting con el mismo contrato de configuracion y respuesta
+- **WHEN** two or more destination API servers exist with different technologies
+- **THEN** the system applies rate-limiting policies with the same configuration and response contract
 
 #### Scenario: Politica desacoplada del vendor
-- **WHEN** se cambia el API server upstream manteniendo la misma configuracion de politicas
-- **THEN** el comportamiento de allow/reject del limitador no cambia por el vendor
+- **WHEN** the upstream API server is changed while keeping the same policy configuration
+- **THEN** allow/reject limiter behavior does not change due to vendor differences
 
 ### Requirement: Rate limiting SHALL be configurable by environment
-El sistema SHALL permitir configurar por ambiente los parámetros del limitador para controlar comportamiento y capacidad.
+The system SHALL allow limiter parameters to be configured per environment to control behavior and capacity.
 
 #### Scenario: Configuración válida aplicada al iniciar
-- **WHEN** el servicio inicia con propiedades validas de rate limiting
-- **THEN** el limitador usa `enabled`, `capacity` y `refillRatePerSecond` definidos en configuracion
+- **WHEN** the service starts with valid rate-limiting properties
+- **THEN** the limiter uses `enabled`, `capacity`, and `refillRatePerSecond` defined in configuration
 
 #### Scenario: Feature deshabilitada
-- **WHEN** la propiedad de habilitacion de rate limiting esta en falso
-- **THEN** las requests se reenvian sin evaluacion de limite
+- **WHEN** the rate-limiting enable property is false
+- **THEN** requests are forwarded without limit evaluation
 
 ### Requirement: Rate limiting rules SHALL be loaded from disk and cached
-El sistema SHALL cargar reglas de rate limiting desde archivo en disco y mantenerlas en cache en memoria con refresco periodico.
+The system SHALL load rate-limiting rules from a disk file and keep them in in-memory cache with periodic refresh.
 
 #### Scenario: Carga inicial de reglas
-- **WHEN** el servicio inicia y el archivo YAML de reglas es valido
-- **THEN** el middleware carga reglas en cache y las usa para evaluar requests
+- **WHEN** the service starts and the YAML rules file is valid
+- **THEN** the middleware loads rules into cache and uses them to evaluate requests
 
 #### Scenario: Fallback a ultimo snapshot valido
-- **WHEN** el proceso de refresh periodico encuentra reglas invalidas
-- **THEN** el middleware mantiene el ultimo snapshot de reglas valido y registra el error
+- **WHEN** the periodic refresh process finds invalid rules
+- **THEN** the middleware keeps the last valid rules snapshot and logs the error
 
 #### Scenario: Arranque sin snapshot valido
-- **WHEN** el servicio inicia y no existe ningun snapshot valido de reglas YAML
-- **THEN** el proceso de startup falla de forma explicita y el servicio no acepta trafico
+- **WHEN** the service starts and no valid YAML rules snapshot exists
+- **THEN** startup fails explicitly and the service does not accept traffic
 
 #### Scenario: Refresh por polling configurable
-- **WHEN** el worker ejecuta el ciclo de polling segun su intervalo configurado
-- **THEN** el middleware refresca el snapshot de reglas solo si la nueva carga es valida
+- **WHEN** the worker runs the polling cycle based on its configured interval
+- **THEN** the middleware refreshes the rules snapshot only when the new load is valid
 
 #### Scenario: Snapshot stale prolongado en runtime
-- **WHEN** ocurren fallas consecutivas de refresh luego de una inicializacion valida
-- **THEN** el middleware sigue evaluando requests con el ultimo snapshot valido sin detener el servicio por TTL
+- **WHEN** consecutive refresh failures occur after a valid initialization
+- **THEN** the middleware keeps evaluating requests with the last valid snapshot without stopping the service due to TTL
 
 ### Requirement: The service SHALL support configurable identity keys for quotas
-El sistema SHALL permitir seleccionar la clave de identidad usada para cuotas (por ejemplo IP cliente, API key o combinacion con ruta).
+The system SHALL allow selecting the identity key used for quotas (for example client IP, API key, or route combination).
 
 #### Scenario: Clave compuesta por defecto
-- **WHEN** la politica de identidad no define override explicito
-- **THEN** la cuota se calcula con clave compuesta `identity + method + normalizedRoute`
+- **WHEN** the identity policy does not define an explicit override
+- **THEN** quota is calculated with composite key `identity + method + normalizedRoute`
 
 #### Scenario: Fallback de identidad
-- **WHEN** la politica usa `api-key` como identidad primaria y el header no esta presente
-- **THEN** el sistema usa `client-ip` como fallback para construir la clave de cuota
+- **WHEN** the policy uses `api-key` as primary identity and the header is missing
+- **THEN** the system uses `client-ip` as fallback to build the quota key
 
 #### Scenario: Limite por API key
-- **WHEN** la politica de identidad esta configurada para header de API key
-- **THEN** la cuota se calcula por valor de ese header
+- **WHEN** the identity policy is configured for API key header
+- **THEN** quota is calculated by the value of that header
 
 #### Scenario: Limite por IP cliente
-- **WHEN** la politica de identidad esta configurada para IP cliente
-- **THEN** la cuota se calcula por direccion IP de origen
+- **WHEN** the identity policy is configured for client IP
+- **THEN** quota is calculated by source IP address
 
 ### Requirement: Quota scope SHALL be identity-plus-endpoint in v1
-El sistema SHALL evaluar limites en v1 usando solo alcance por identidad y endpoint (`method + normalizedRoute`), sin bucket global agregado.
+The system SHALL evaluate limits in v1 using only identity-plus-endpoint scope (`method + normalizedRoute`), without an aggregated global bucket.
 
 #### Scenario: Dos endpoints independientes
-- **WHEN** una misma identidad consume cuota en dos endpoints distintos
-- **THEN** cada endpoint mantiene su propio contador de cuota independiente
+- **WHEN** the same identity consumes quota on two different endpoints
+- **THEN** each endpoint keeps its own independent quota counter
 
 #### Scenario: Ruta templada para cuota
-- **WHEN** dos requests comparten el mismo endpoint funcional pero difieren en IDs de path
-- **THEN** ambas usan la misma `normalizedRoute` templada para calcular la cuota
+- **WHEN** two requests share the same functional endpoint but differ in path IDs
+- **THEN** both use the same templated `normalizedRoute` to calculate quota
 
 ### Requirement: Rate limit rejections SHALL expose standard quota metadata
-El sistema SHALL incluir metadatos de cuota en headers de respuesta para requests rechazadas por limite.
+The system SHALL include quota metadata in response headers for requests rejected by limit.
 
 #### Scenario: Rechazo con informacion de cuota
-- **WHEN** una request es rechazada por rate limiting
-- **THEN** la respuesta `429` incluye `X-RateLimit-Limit`, `X-RateLimit-Remaining` y `X-RateLimit-Retry-After` calculado dinamicamente segun deficit de tokens y refill rate
+- **WHEN** a request is rejected by rate limiting
+- **THEN** the `429` response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Retry-After` dynamically calculated from token deficit and refill rate
 
 #### Scenario: Respuesta permitida sin headers de cuota
-- **WHEN** una request es permitida y reenviada al upstream
-- **THEN** la respuesta no incluye headers `X-RateLimit-*` generados por el middleware de rate limiting
+- **WHEN** a request is allowed and forwarded upstream
+- **THEN** the response does not include `X-RateLimit-*` headers generated by the rate-limiting middleware
 
 ### Requirement: Rate-limited requests SHALL be dropped in v1
-El sistema SHALL descartar en forma inmediata las requests rate-limited en v1, sin encolado diferido.
+The system SHALL drop rate-limited requests immediately in v1, without deferred queueing.
 
 #### Scenario: Exceso de limite sin encolado
-- **WHEN** una request supera el limite configurado
-- **THEN** el sistema responde `429` y no encola la request para procesamiento posterior
+- **WHEN** a request exceeds the configured limit
+- **THEN** the system responds with `429` and does not enqueue the request for later processing
 
 #### Scenario: Hard rate limiting en v1
-- **WHEN** una request supera el limite configurado en v1
-- **THEN** el sistema no aplica modo soft y mantiene rechazo inmediato
+- **WHEN** a request exceeds the configured limit in v1
+- **THEN** the system does not apply soft mode and keeps immediate rejection
 
 ### Requirement: The service SHALL provide fault-tolerant degradation modes
-El sistema SHALL definir una politica configurable para cuando el backend de rate limiting (Redis) no este disponible.
+The system SHALL define a configurable policy for when the rate-limiting backend (Redis) is unavailable.
 
 #### Scenario: Degradacion por defecto fail-open
-- **WHEN** Redis no esta disponible y la politica efectiva es `fail-open`
-- **THEN** la request se permite y se reenvia al upstream
+- **WHEN** Redis is unavailable and the effective policy is `fail-open`
+- **THEN** the request is allowed and forwarded upstream
 
 #### Scenario: Degradacion sensible fail-closed
-- **WHEN** Redis no esta disponible y la politica efectiva de la ruta/politica es `fail-closed`
-- **THEN** la request se rechaza con respuesta explicita sin reenviar al upstream
+- **WHEN** Redis is unavailable and the effective route/policy is `fail-closed`
+- **THEN** the request is rejected with an explicit response without forwarding upstream
 
 ### Requirement: Rate limiting SHALL produce operational metrics
-El sistema SHALL registrar métricas para observar el comportamiento del limitador y facilitar tuning operativo.
+The system SHALL record metrics to observe limiter behavior and support operational tuning.
 
 #### Scenario: Solicitud permitida incrementa métrica
-- **WHEN** una solicitud es permitida y reenviada
-- **THEN** se incrementa el contador de solicitudes permitidas
+- **WHEN** a request is allowed and forwarded
+- **THEN** the allowed-requests counter is incremented
 
 #### Scenario: Solicitud rechazada incrementa métrica
-- **WHEN** una solicitud es rechazada por politica de rate limiting
-- **THEN** se incrementa el contador de solicitudes limitadas
+- **WHEN** a request is rejected by rate-limiting policy
+- **THEN** the limited-requests counter is incremented
 
 
