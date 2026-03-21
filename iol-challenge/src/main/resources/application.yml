@@ -1,0 +1,11 @@
+rate-limiter:
+  enabled: true
+  endpoint-prefix: /rl
+  rules-path: ./rate-limiter-rules.yaml
+  refresh-interval: 30s
+  default-capacity: 100
+  default-refill-rate-per-second: 50
+  default-identity-header: X-Api-Key
+  default-fail-mode: fail-open
+  default-upstream-url: http://localhost:8081
+

@@ -1,0 +1,10 @@
+rules:
+  - name: default
+    method: "*"
+    route: "*"
+    upstreamUrl: "http://localhost:8081"
+    capacity: 100
+    refillRatePerSecond: 50
+    identityHeader: X-Api-Key
+    failMode: fail-open
+

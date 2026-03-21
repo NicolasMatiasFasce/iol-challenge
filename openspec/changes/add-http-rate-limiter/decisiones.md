@@ -180,3 +180,15 @@
 **Decision tomada:** A.
 **Justificacion corta:** reduce complejidad de contrato en v1 y mantiene coherencia con el set minimo `X-RateLimit-*`.
 
+## Roadmap v2. Estrategia hibrida (cache local + Redis central)
+- **Objetivo:** reducir latencia y carga sobre Redis en hot paths sin perder consistencia operativa.
+- **Diseno propuesto:**
+  - L1 cache local por instancia con TTL corto para decisiones recientes.
+  - Redis central como source of truth para cuotas y sincronizacion global.
+  - Invalidacion por expiracion (TTL) y fallback a Redis ante miss o inconsistencia.
+- **Criterios de activacion:**
+  - p95 de latencia de decision > objetivo definido para v1.
+  - Uso de CPU/IO de Redis sostenido por encima del umbral operativo.
+  - Volumen de requests por endpoint con alta repeticion de identidad+ruta.
+  - Evidencia en metricas de que el cache local reduce round-trips sin romper fairness.
+
