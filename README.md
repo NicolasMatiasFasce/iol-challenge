@@ -40,4 +40,5 @@ Se eligio el problema de **Rate Limiter** del capitulo 4 (middleware en el medio
 
 - `scripts/dev-up.sh`: levanta Redis y la aplicacion.
 - `scripts/dev-up-and-test.sh`: llama al script anterior y ejecuta pruebas con reporte.
+- `scripts/dev-down.sh`: detiene app/upstream y Redis de forma idempotente (`--purge` elimina el contenedor Redis).
 

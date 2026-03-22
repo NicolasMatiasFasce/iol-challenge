@@ -4,8 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/iol-challenge"
 RUN_DIR="$ROOT_DIR/.run"
-APP_PID_FILE="$RUN_DIR/app.pid"
-UPSTREAM_PID_FILE="$RUN_DIR/upstream.pid"
 REPORT_FILE="$RUN_DIR/test-report.txt"
 
 require_cmd() {
@@ -15,24 +13,14 @@ require_cmd() {
   fi
 }
 
-cleanup() {
-  if [[ -f "$UPSTREAM_PID_FILE" ]]; then
-    local up_pid
-    up_pid="$(cat "$UPSTREAM_PID_FILE")"
-    if kill -0 "$up_pid" >/dev/null 2>&1; then
-      kill "$up_pid" || true
-    fi
-    rm -f "$UPSTREAM_PID_FILE"
-  fi
+is_port_open() {
+  local host="$1"
+  local port="$2"
+  (echo >"/dev/tcp/$host/$port") >/dev/null 2>&1
+}
 
-  if [[ -f "$APP_PID_FILE" ]]; then
-    local app_pid
-    app_pid="$(cat "$APP_PID_FILE")"
-    if kill -0 "$app_pid" >/dev/null 2>&1; then
-      kill "$app_pid" || true
-    fi
-    rm -f "$APP_PID_FILE"
-  fi
+cleanup() {
+  "$ROOT_DIR/scripts/dev-down.sh" >/dev/null 2>&1 || true
 }
 
 wait_for_http() {
@@ -50,11 +38,18 @@ wait_for_http() {
 }
 
 start_dummy_upstream() {
+  local upstream_pid_file="$RUN_DIR/upstream.pid"
+
+  if is_port_open "127.0.0.1" "8081"; then
+    echo "Upstream already reachable on 127.0.0.1:8081"
+    return 0
+  fi
+
   mkdir -p "$RUN_DIR"
   (
     cd "$ROOT_DIR"
     nohup python3 -m http.server 8081 >"$RUN_DIR/upstream.log" 2>&1 &
-    echo $! >"$UPSTREAM_PID_FILE"
+    echo $! >"$upstream_pid_file"
   )
 
   if ! wait_for_http "http://127.0.0.1:8081" 30; then
@@ -98,6 +93,7 @@ main() {
 
   start_dummy_upstream
   "$ROOT_DIR/scripts/dev-up.sh" --background
+
 
   if ! wait_for_http "http://127.0.0.1:8080" 90; then
     echo "App not reachable on 8080" >&2

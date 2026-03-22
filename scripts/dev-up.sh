@@ -19,6 +19,12 @@ require_cmd() {
   fi
 }
 
+is_port_open() {
+  local host="$1"
+  local port="$2"
+  (echo >"/dev/tcp/$host/$port") >/dev/null 2>&1
+}
+
 wait_for_http() {
   local url="$1"
   local retries="${2:-60}"
@@ -35,6 +41,11 @@ wait_for_http() {
 }
 
 start_redis() {
+  if is_port_open "127.0.0.1" "6379"; then
+    echo "Redis already reachable on 127.0.0.1:6379"
+    return 0
+  fi
+
   if ! docker ps --format '{{.Names}}' | grep -q '^rl-redis$'; then
     if docker ps -a --format '{{.Names}}' | grep -q '^rl-redis$'; then
       docker start rl-redis >/dev/null
@@ -42,10 +53,25 @@ start_redis() {
       docker run --name rl-redis -p 6379:6379 -d redis:7 >/dev/null
     fi
   fi
+
+  for _ in $(seq 1 30); do
+    if is_port_open "127.0.0.1" "6379"; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Redis container started but port 6379 is not reachable" >&2
+  exit 1
 }
 
 start_app_background() {
   mkdir -p "$RUN_DIR"
+
+  if is_port_open "127.0.0.1" "8080"; then
+    echo "App already reachable on http://127.0.0.1:8080"
+    return 0
+  fi
 
   if [[ -f "$APP_PID_FILE" ]]; then
     local existing_pid
