@@ -1,10 +1,12 @@
 iolchallenge/ratelimiter/service/IdentityExtractor.class
+iolchallenge/ratelimiter/model/RateLimitOutcome.class
 iolchallenge/ratelimiter/model/RateLimitRule.class
 iolchallenge/ratelimiter/model/FailMode.class
 iolchallenge/ratelimiter/service/RouteNormalizer.class
 iolchallenge/ratelimiter/service/TokenBucketGateway$TokenBucketResult.class
 iolchallenge/ratelimiter/model/RateLimitPolicy.class
 iolchallenge/Main.class
+iolchallenge/ratelimiter/service/UpstreamForwardingService.class
 iolchallenge/ratelimiter/service/RedisTokenBucketGateway.class
 iolchallenge/ratelimiter/config/RateLimiterConfiguration.class
 iolchallenge/ratelimiter/service/TokenBucketGateway.class
@@ -12,5 +14,6 @@ iolchallenge/ratelimiter/model/RateLimitDecision.class
 iolchallenge/ratelimiter/service/RateLimitRulesStore.class
 iolchallenge/ratelimiter/model/RateLimitRulesFile.class
 iolchallenge/ratelimiter/controller/RateLimiterProxyController.class
+iolchallenge/ratelimiter/service/RateLimiterOrchestratorService.class
 iolchallenge/ratelimiter/config/RateLimiterProperties.class
 iolchallenge/ratelimiter/service/RateLimitDecisionService.class

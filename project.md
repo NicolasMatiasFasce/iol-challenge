@@ -6,8 +6,10 @@
   - Aplicacion Spring Boot principal.
 - `openspec/changes/add-http-rate-limiter/`
   - Trazabilidad funcional del cambio (proposal/design/spec/tasks/decisiones).
-- `readme.md`
+- `README.md`
   - Introduccion del challenge y enlaces clave.
+- `guia.md`
+  - Recorrido detallado del flujo de implementacion.
 - `startup.md`
   - Pasos concretos para ejecutar y validar.
 
@@ -29,9 +31,26 @@ Este proyecto funciona como **rate limiter HTTP intermedio**:
 - Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/controller/RateLimiterProxyController.java`
 - Responsabilidad:
   - Punto de entrada del middleware.
-  - Enrutado hacia decision de cuota y forwarding.
+  - Delegar evaluacion de cuota al orquestador.
+  - Construir respuesta `429` o delegar forwarding.
 
-### 3.2 Resolucion de reglas
+### 3.2 Orquestacion de cuota
+
+- Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimiterOrchestratorService.java`
+- Responsabilidad:
+  - Resolver `forwardedPath` y `normalizedRoute`.
+  - Resolver politica, identidad y clave de cuota.
+  - Ejecutar decision final de allow/reject.
+
+### 3.3 Forwarding HTTP
+
+- Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/UpstreamForwardingService.java`
+- Responsabilidad:
+  - Reenviar requests permitidas al upstream.
+  - Preservar method/path/query/headers/body.
+  - Mapear respuesta upstream a `ResponseEntity`.
+
+### 3.4 Resolucion de reglas
 
 - Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitRulesStore.java`
 - Responsabilidad:
@@ -41,7 +60,7 @@ Este proyecto funciona como **rate limiter HTTP intermedio**:
   - Fallback al ultimo snapshot valido en errores de refresh.
   - Abort startup si no existe snapshot valido inicial.
 
-### 3.3 Decision de cuota
+### 3.5 Decision de cuota
 
 - Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitDecisionService.java`
 - Responsabilidad:
@@ -50,14 +69,14 @@ Este proyecto funciona como **rate limiter HTTP intermedio**:
   - Resolver degradacion fail-open/fail-closed ante error de backend.
   - Emitir decision final con `allowed`, `remaining`, `retryAfter`.
 
-### 3.4 Token bucket distribuido
+### 3.6 Token bucket distribuido
 
 - Archivo: `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RedisTokenBucketGateway.java`
 - Responsabilidad:
   - Ejecutar script Lua atomico en Redis.
   - Devolver permit/reject, remaining y retry-after dinamico.
 
-### 3.5 Identidad y ruta normalizada
+### 3.7 Identidad y ruta normalizada
 
 - Archivos:
   - `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/IdentityExtractor.java`
@@ -121,10 +140,12 @@ Metricas principales:
 1. `iol-challenge/src/main/resources/application.yml`
 2. `iol-challenge/src/main/java/iolchallenge/ratelimiter/config/RateLimiterProperties.java`
 3. `iol-challenge/src/main/java/iolchallenge/ratelimiter/controller/RateLimiterProxyController.java`
-4. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitRulesStore.java`
-5. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitDecisionService.java`
-6. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RedisTokenBucketGateway.java`
-7. Tests en `iol-challenge/src/test/java/iolchallenge/ratelimiter/`
+4. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimiterOrchestratorService.java`
+5. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/UpstreamForwardingService.java`
+6. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitRulesStore.java`
+7. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RateLimitDecisionService.java`
+8. `iol-challenge/src/main/java/iolchallenge/ratelimiter/service/RedisTokenBucketGateway.java`
+9. Tests en `iol-challenge/src/test/java/iolchallenge/ratelimiter/`
 
 ## 8. Referencias de especificacion
 

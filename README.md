@@ -19,6 +19,7 @@ Se eligio el problema de **Rate Limiter** del capitulo 4 (middleware en el medio
 ## 2) Documento del proyecto
 
 - Ver [project.md](project.md)
+- Ver [guia.md](guia.md)
 
 ## 3) OpenSpec: que contiene cada documento
 
@@ -34,3 +35,9 @@ Se eligio el problema de **Rate Limiter** del capitulo 4 (middleware en el medio
 ## 4) Como levantar y probar
 
 - Ver [startup.md](startup.md)
+
+## 5) Scripts de automatizacion
+
+- `scripts/dev-up.sh`: levanta Redis y la aplicacion.
+- `scripts/dev-up-and-test.sh`: llama al script anterior y ejecuta pruebas con reporte.
+

@@ -7,12 +7,12 @@
 | B. Sidecar por servicio | Menor latencia local, mayor complejidad operativa. |
 | C. Hibrido | Maxima flexibilidad, costo/operacion mas altos. |
 **Decision tomada:** A para v1, con camino a C en v2.
-**Justificacion corta:** maximize simplicidad y time-to-market del challenge.
+**Justificacion corta:** maximizar simplicidad y tiempo de salida en el challenge.
 
 ## D2. Algoritmo principal
 | Opcion | Comparacion breve |
 |---|---|
-| A. Token bucket | Simple, memory-efficient, soporta bursts cortos. |
+| A. Token bucket | Simple, eficiente en memoria, soporta rafagas cortas. |
 | B. Sliding window counter | Mas preciso, mas complejo. |
 | C. Sliding/log u otros | Mayor precision en algunos casos, costo superior. |
 **Decision tomada:** A (Token bucket).
@@ -31,7 +31,7 @@
 | Opcion | Comparacion breve |
 |---|---|
 | A. Lua Script en Redis | Atomico, evita race conditions, buen rendimiento. |
-| B. WATCH/MULTI/EXEC | Valido pero con retries y mayor friccion bajo carga. |
+| B. WATCH/MULTI/EXEC | Valido pero con reintentos y mayor friccion bajo carga. |
 | C. Locks distribuidos | Mas lento y complejo. |
 **Decision tomada:** A.
 **Justificacion corta:** robustez concurrente con bajo overhead.
@@ -43,22 +43,22 @@
 | B. Fail-closed global | Proteccion maxima, peor disponibilidad. |
 | C. Configurable por politica/ruta | Balancea disponibilidad y proteccion, mas configuracion. |
 **Decision tomada:** C (default fail-open, override fail-closed).
-**Justificacion corta:** cumple fault tolerance sin perder control en rutas criticas.
+**Justificacion corta:** cumple tolerancia a fallos sin perder control en rutas criticas.
 
 ## D6. Clave de cuota
 | Opcion | Comparacion breve |
 |---|---|
-| A. Solo IP | Simple, fairness limitado por NAT/proxies. |
+| A. Solo IP | Simple, equidad limitada por NAT/proxies. |
 | B. Solo API key | Mejor por cliente autenticado, depende de credencial. |
-| C. `identity + method + normalizedRoute` | Buen control y fairness, mayor cardinalidad. |
-**Decision tomada:** C, con fallback `api-key -> client-ip`.
+| C. `identity + method + normalizedRoute` | Buen control y equidad, mayor cardinalidad. |
+**Decision tomada:** C, con respaldo `api-key -> client-ip`.
 **Justificacion corta:** evita que un endpoint consuma cuota de otro.
 
 ## D7. Hard vs soft rate limiting
 | Opcion | Comparacion breve |
 |---|---|
 | A. Hard | Estricto y predecible. |
-| B. Soft | Mejor UX en picos, menor rigor. |
+| B. Soft | Mejor experiencia en picos, menor rigor. |
 | C. Mixto por politica | Flexibilidad con mayor complejidad. |
 **Decision tomada:** A en v1, con camino a C en v2.
 **Justificacion corta:** v1 prioriza simplicidad y comportamiento determinista; v2 puede agregar flexibilidad por politica.
@@ -115,7 +115,7 @@
 | B. JSON | Estricto, menos amigable para edicion manual. |
 | C. Ambos | Flexible, mas codigo y validacion. |
 **Decision tomada:** A.
-**Justificacion corta:** mejor DX/operacion en challenge.
+**Justificacion corta:** mejor experiencia de desarrollo y operacion en challenge.
 
 ## D14. Mecanismo de refresh
 | Opcion | Comparacion breve |
@@ -181,11 +181,11 @@
 **Justificacion corta:** reduce complejidad de contrato en v1 y mantiene coherencia con el set minimo `X-RateLimit-*`.
 
 ## Roadmap v2. Estrategia hibrida (cache local + Redis central)
-- **Objetivo:** reducir latencia y carga sobre Redis en hot paths sin perder consistencia operativa.
+- **Objetivo:** reducir latencia y carga sobre Redis en rutas calientes sin perder consistencia operativa.
 - **Diseno propuesto:**
   - L1 cache local por instancia con TTL corto para decisiones recientes.
-  - Redis central como source of truth para cuotas y sincronizacion global.
-  - Invalidacion por expiracion (TTL) y fallback a Redis ante miss o inconsistencia.
+  - Redis central como fuente de verdad para cuotas y sincronizacion global.
+  - Invalidacion por expiracion (TTL) y respaldo a Redis ante ausencia de dato o inconsistencia.
 - **Criterios de activacion:**
   - p95 de latencia de decision > objetivo definido para v1.
   - Uso de CPU/IO de Redis sostenido por encima del umbral operativo.

@@ -1,28 +1,28 @@
 ## Why
 
-La organizacion necesita un componente comun para controlar caudal HTTP sin acoplarse a un API server especifico. En lugar de limitar en cliente o en servidor, este proyecto debe actuar en el medio del trafico como un rate limiter standalone que proteja a multiples servicios upstream con un comportamiento consistente.
+The organization needs a shared component to control HTTP traffic rate without coupling to a specific API server. Instead of limiting on the client side or inside each server, this project must operate in the middle of the traffic as a standalone rate limiter that protects multiple upstream services with consistent behavior.
 
 ## What Changes
 
-- El proyecto pasa a ser un servicio de rate limiting HTTP standalone, ubicado entre cliente y API upstream (patron proxy/interceptor).
-- Se define un modelo de politicas de limite agnostico del servidor de destino (por identidad de cliente, ruta y metodo).
-- Se estandariza la respuesta de limite excedido con codigo `429` y metadatos de cuota en headers.
-- Se incorpora forwarding transparente hacia upstream cuando la solicitud es permitida.
-- Se agregan metricas operativas del limitador y trazabilidad de decisiones de allow/reject.
-- Se documenta contrato de integracion para multiples API servers de la misma organizacion.
+- The project becomes a standalone HTTP rate-limiting service, positioned between client and upstream API (proxy/interceptor pattern).
+- A server-agnostic limit-policy model is defined (by client identity, route, and method).
+- A standard limit-exceeded response is defined with status code `429` and quota metadata in headers.
+- Transparent forwarding to upstream is added when the request is allowed.
+- Operational metrics and allow/reject decision traceability are added.
+- An integration contract for multiple API servers in the same organization is documented.
 
 ## Capabilities
 
 ### New Capabilities
-- `http-rate-limiting`: Ejecuta rate limiting server-agnostico como capa intermedia entre cliente y API server, con forwarding y observabilidad.
+- `http-rate-limiting`: Executes server-agnostic rate limiting as an intermediary layer between client and API server, with forwarding and observability.
 
 ### Modified Capabilities
-- Ninguna.
+- None.
 
 ## Impact
 
-- Codigo afectado: pipeline HTTP de entrada/salida, enrutamiento a upstream, politicas de rate limit y configuracion.
-- APIs: se incorpora interfaz HTTP del limitador (proxy) para recibir trafico cliente y reenviarlo.
-- Dependencias: mantener implementacion con capacidades estandar de Java/Spring sin acople a un gateway/vendor especifico.
-- Operacion: requiere configuracion por entorno (limites, claves de identidad, upstreams) y monitoreo continuo de `allow/reject`.
+- Affected code: HTTP inbound/outbound pipeline, upstream routing, rate-limit policies, and configuration.
+- APIs: an HTTP interface for the limiter (proxy) is introduced to receive and forward client traffic.
+- Dependencies: keep implementation based on standard Java/Spring capabilities without coupling to a specific gateway/vendor.
+- Operations: requires per-environment configuration (limits, identity keys, upstreams) and continuous monitoring of `allow/reject`.
 
