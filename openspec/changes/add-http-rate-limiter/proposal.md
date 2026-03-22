@@ -16,9 +16,6 @@ The organization needs a shared component to control HTTP traffic rate without c
 ### New Capabilities
 - `http-rate-limiting`: Executes server-agnostic rate limiting as an intermediary layer between client and API server, with forwarding and observability.
 
-### Modified Capabilities
-- None.
-
 ## Impact
 
 - Affected code: HTTP inbound/outbound pipeline, upstream routing, rate-limit policies, and configuration.

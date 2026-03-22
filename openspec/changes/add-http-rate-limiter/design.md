@@ -18,83 +18,83 @@ This project is redefined as an infrastructure component that sits between clien
 
 ## Decisions
 
-1. Arquitectura proxy/interceptor en el medio del trafico.
+1. Proxy/interceptor architecture in the traffic middle layer.
    - Rationale: enables integration with heterogeneous clients and API servers without deep changes in each service.
-   - Alternativas: limiting in the client or in each API server is discarded due to duplication and coupling.
+   - Alternatives: limiting in the client or in each API server is discarded due to duplication and coupling.
 
-2. Politica de rate limiting desacoplada del upstream.
+2. Upstream-decoupled rate-limiting policy.
    - Rationale: allow/reject decisions depend on an identity key and request descriptor, not on the destination server type.
-   - Alternativas: ad-hoc rules per API server are discarded because of low reusability.
+   - Alternatives: ad-hoc rules per API server are discarded because of low reusability.
 
-3. Algoritmo token bucket con estado centralizado en Redis para v1.
+3. Token bucket algorithm with centralized Redis state for v1.
    - Rationale: keeps token-bucket simplicity and supports distributed deployment in a central gateway.
-   - Parametros: `enabled`, `capacity`, `refillRatePerSecond`.
-   - Nota de versionado: a hybrid option with local cache + central Redis is planned for v2.
+   - Parameters: `enabled`, `capacity`, `refillRatePerSecond`.
+   - Versioning note: a hybrid option with local cache + central Redis is planned for v2.
 
-4. Atomicidad de decisiones en Redis mediante Lua Script para v1.
+4. Atomic decisioning in Redis using Lua Script for v1.
    - Rationale: avoids race conditions in concurrent scenarios without the cost of distributed locks.
-   - Alcance: counter/state read, limit evaluation, and update in one atomic operation.
+   - Scope: counter/state read, limit evaluation, and update in one atomic operation.
 
-5. Contrato HTTP de throttling en v1: opcion A (headers minimos `X-RateLimit-*`).
+5. HTTP throttling contract in v1: option A (minimal `X-RateLimit-*` headers).
    - Rationale: provides clear information to clients with low implementation complexity for the challenge.
    - Decision: include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Retry-After` in `429` responses.
 
-6. Forwarding transparente para requests permitidas.
+6. Transparent forwarding for allowed requests.
    - Rationale: the component adds rate control without unnecessarily changing upstream business semantics.
 
-7. Exponer metricas de permitidas/rechazadas con instrumentacion existente.
+7. Expose allowed/rejected metrics with existing instrumentation.
    - Rationale: enables operational tuning and early detection of inadequate policies.
 
-8. Politica de degradacion configurable ante falla de Redis/rate-limiter backend.
+8. Configurable degradation policy on Redis/rate-limiter backend failure.
    - Rationale: balances high availability and upstream protection based on each route/policy criticality.
    - Decision: global default `fail-open`, with `fail-closed` override per sensitive policy/endpoint.
 
-9. Clave de cuota por defecto compuesta (`identity + method + normalizedRoute`).
+9. Default composite quota key (`identity + method + normalizedRoute`).
    - Rationale: prevents one route from consuming another route's quota and improves fairness in multi-endpoint scenarios.
    - Decision: `identity` uses `api-key` when present with `client-ip` fallback; alternative modes are supported by configuration.
 
-10. Manejo de requests rate-limited en v1: opcion A (drop inmediato).
+10. Handling of rate-limited requests in v1: option A (immediate drop).
    - Rationale: minimizes latency and operational complexity for the challenge.
    - Decision: when the limit is exceeded, return `429` and drop the request immediately, with no waiting or deferred queue in v1.
-   - Nota de versionado: v1 uses hard rate limiting; v2 may evolve to a mixed policy-based model.
+   - Versioning note: v1 uses hard rate limiting; v2 may evolve to a mixed policy-based model.
 
-11. Fuente de reglas en v1: opcion A (archivo en disco + worker de refresh a cache).
+11. Rule source in v1: option A (disk file + cache-refresh worker).
    - Rationale: keeps operations simple for the challenge and follows chapter 4 flow (rules on disk, periodic load into cache).
    - Decision: load rules from a versioned local file, refresh them periodically into in-memory cache, and use the last valid snapshot on parse errors.
 
-12. Alcance de cuotas en v1: opcion A (solo identidad+endpoint).
+12. Quota scope in v1: option A (identity+endpoint only).
    - Rationale: simplifies initial configuration and prioritizes fairness by client/route.
    - Decision: no aggregated global limit is applied in v1; each decision uses key `identity + method + normalizedRoute`.
 
-13. Emision de headers de cuota en v1: opcion A (solo en respuestas `429`).
+13. Quota header emission in v1: option A (only in `429` responses).
    - Rationale: reduces complexity and serialization overhead for allowed requests.
    - Decision: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Retry-After` are emitted only when the request is throttled.
 
-14. Formato de reglas en disco para v1: opcion A (YAML).
+14. Rule format on disk for v1: option A (YAML).
    - Rationale: improves operational readability and stays aligned with chapter 4 examples.
    - Decision: policies are defined in versioned YAML files on disk and validated on load.
 
-15. Mecanismo de refresh de reglas en v1: opcion A (polling periodico).
+15. Rule refresh mechanism in v1: option A (periodic polling).
    - Rationale: it is portable, simple, and predictable enough for the challenge.
    - Decision: workers update cache at configurable intervals; on read/parse errors, the last valid snapshot is kept.
 
-16. Comportamiento de arranque sin reglas validas en v1: opcion C (abort startup).
+16. Startup behavior without valid rules in v1: option C (abort startup).
    - Rationale: guarantees a deterministic initial state and avoids exposing the system without a defined control policy.
    - Decision: if no valid snapshot exists at startup, the service does not start; fallback to the last snapshot applies only after successful initialization.
 
-17. Manejo de snapshot stale en runtime para v1: opcion A (aceptar indefinidamente).
+17. Runtime stale-snapshot handling in v1: option A (accept indefinitely).
    - Rationale: prioritizes service continuity during prolonged refresh mechanism failures.
    - Decision: if successive refreshes fail, the middleware keeps operating with the last valid snapshot without an automatic blocking TTL.
 
-18. Calculo de `X-RateLimit-Retry-After` en v1: opcion B (dinamico).
+18. `X-RateLimit-Retry-After` calculation in v1: option B (dynamic).
    - Rationale: provides a more precise retry signal for clients and reduces retry storms.
    - Decision: for each `429`, `X-RateLimit-Retry-After` is calculated from token deficit and `refillRatePerSecond` of the applied policy.
 
-19. Normalizacion de ruta para clave de cuota en v1: opcion B (ruta templada).
+19. Route normalization for quota key in v1: option B (templated route).
    - Rationale: reduces key cardinality without losing endpoint-level granularity.
    - Decision: `normalizedRoute` uses templated format (for example `/users/{id}/orders/{orderId}`) instead of full literal route.
 
-20. Header de reintento en v1: opcion A (solo `X-RateLimit-Retry-After`).
+20. Retry header in v1: option A (only `X-RateLimit-Retry-After`).
    - Rationale: reduces contract complexity and keeps consistency with the minimum `X-RateLimit-*` set.
    - Decision: on `429`, emit `X-RateLimit-Retry-After` with a dynamic value.
 

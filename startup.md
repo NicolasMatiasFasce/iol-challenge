@@ -1,10 +1,17 @@
 # Startup y pruebas rapidas
 
+> Esta guia describe el **levantamiento manual** paso a paso.
+>
+> Si queres levantar todo en un solo paso, usa:
+>
+> - `./scripts/dev-up.sh` para levantar entorno + app.
+> - `./scripts/dev-up-and-test.sh` para levantar, probar y apagar automaticamente.
+
 ## Prerrequisitos
 
 - Java 21
 - Maven 3.8+
-- Redis en `localhost:6379`
+- Tener disponible el puerto `6379` para Redis
 
 ## 1) Levantar Redis
 
