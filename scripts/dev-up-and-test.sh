@@ -5,12 +5,25 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/iol-challenge"
 RUN_DIR="$ROOT_DIR/.run"
 REPORT_FILE="$RUN_DIR/test-report.txt"
+MVN_BIN=""
+PYTHON3_BIN=""
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Error: required command not found: $1" >&2
     exit 1
   fi
+}
+
+resolve_cmd_path() {
+  local cmd="$1"
+  local resolved
+  resolved="$(type -P "$cmd" || true)"
+  if [[ -z "$resolved" ]]; then
+    echo "Error: required executable not found in PATH: $cmd" >&2
+    exit 1
+  fi
+  echo "$resolved"
 }
 
 is_port_open() {
@@ -48,7 +61,7 @@ start_dummy_upstream() {
   mkdir -p "$RUN_DIR"
   (
     cd "$ROOT_DIR"
-    nohup python3 -m http.server 8081 >"$RUN_DIR/upstream.log" 2>&1 &
+    nohup "$PYTHON3_BIN" -m http.server 8081 >"$RUN_DIR/upstream.log" 2>&1 &
     echo $! >"$upstream_pid_file"
   )
 
@@ -59,25 +72,48 @@ start_dummy_upstream() {
 }
 
 run_http_probe() {
-  local total=30
+  local bursts=5
+  local burst_size=80
+  local total=$((bursts * burst_size))
   local ok=0
   local limited=0
+  local probe_identity="probe-$(date +%s)-$$"
+  local codes_file
+  codes_file="$(mktemp)"
 
-  for _ in $(seq 1 "$total"); do
-    code="$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/rl/users/123" -H "X-Api-Key: demo-client")"
+  # Envia rafagas concurrentes para superar capacidad/refill y observar 429.
+  for _ in $(seq 1 "$bursts"); do
+    for _ in $(seq 1 "$burst_size"); do
+      {
+        curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/rl/users/123" -H "X-Api-Key: $probe_identity"
+        echo
+      } >>"$codes_file" &
+    done
+    wait
+  done
+
+  while IFS= read -r code; do
     if [[ "$code" == "429" ]]; then
       limited=$((limited + 1))
-    elif [[ "$code" =~ ^2|3|4|5 ]]; then
+    elif [[ -n "$code" ]]; then
       ok=$((ok + 1))
     fi
-  done
+  done <"$codes_file"
+
+  rm -f "$codes_file"
 
   {
     echo "HTTP probe summary"
     echo "total=$total"
+    echo "identity=$probe_identity"
     echo "non429=$ok"
     echo "limited429=$limited"
   } >>"$REPORT_FILE"
+
+  if [[ "$limited" -lt 1 ]]; then
+    echo "HTTP probe warning: no 429 responses observed (check rules/config)." >&2
+    echo "warning=no_429_observed" >>"$REPORT_FILE"
+  fi
 }
 
 main() {
@@ -85,6 +121,9 @@ main() {
   require_cmd curl
   require_cmd mvn
   require_cmd python3
+
+  MVN_BIN="$(resolve_cmd_path mvn)"
+  PYTHON3_BIN="$(resolve_cmd_path python3)"
 
   trap cleanup EXIT
 
@@ -104,7 +143,7 @@ main() {
 
   (
     cd "$APP_DIR"
-    mvn -q test
+    "$MVN_BIN" -q test
   )
 
   {

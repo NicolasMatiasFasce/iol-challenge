@@ -60,7 +60,7 @@ public class RateLimitRulesStore {
     /**
      * Ejecuta refresh periodico por polling conservando el ultimo snapshot valido ante error.
      */
-    @Scheduled(fixedDelayString = "#{@rateLimiterProperties.refreshInterval().toMillis()}")
+    @Scheduled(fixedDelayString = "${rate-limiter.refresh-interval:30s}")
     public void refresh() {
         refreshInternal(false);
     }

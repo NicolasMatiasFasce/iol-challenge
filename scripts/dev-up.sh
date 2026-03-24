@@ -6,6 +6,7 @@ APP_DIR="$ROOT_DIR/iol-challenge"
 RUN_DIR="$ROOT_DIR/.run"
 APP_LOG="$RUN_DIR/app.log"
 APP_PID_FILE="$RUN_DIR/app.pid"
+MVN_BIN=""
 
 MODE="foreground"
 if [[ "${1:-}" == "--background" ]]; then
@@ -17,6 +18,17 @@ require_cmd() {
     echo "Error: required command not found: $1" >&2
     exit 1
   fi
+}
+
+resolve_cmd_path() {
+  local cmd="$1"
+  local resolved
+  resolved="$(type -P "$cmd" || true)"
+  if [[ -z "$resolved" ]]; then
+    echo "Error: required executable not found in PATH: $cmd" >&2
+    exit 1
+  fi
+  echo "$resolved"
 }
 
 is_port_open() {
@@ -84,7 +96,7 @@ start_app_background() {
 
   (
     cd "$APP_DIR"
-    nohup mvn -q spring-boot:run >"$APP_LOG" 2>&1 &
+    nohup "$MVN_BIN" -q spring-boot:run >"$APP_LOG" 2>&1 &
     echo $! >"$APP_PID_FILE"
   )
 
@@ -98,13 +110,15 @@ start_app_background() {
 
 start_app_foreground() {
   cd "$APP_DIR"
-  exec mvn spring-boot:run
+  exec "$MVN_BIN" spring-boot:run
 }
 
 main() {
   require_cmd docker
   require_cmd mvn
   require_cmd curl
+
+  MVN_BIN="$(resolve_cmd_path mvn)"
 
   start_redis
 
