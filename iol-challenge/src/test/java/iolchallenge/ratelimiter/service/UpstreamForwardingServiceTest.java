@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class UpstreamForwardingServiceTest {
 
@@ -79,6 +81,20 @@ class UpstreamForwardingServiceTest {
         assertEquals("v1", response.getHeaders().getFirst("X-Upstream-Version"));
         assertNull(response.getHeaders().getFirst("Connection"));
         assertNull(response.getHeaders().getFirst("Transfer-Encoding"));
+    }
+
+    @Test
+    void shouldReturnBadGatewayWhenUpstreamIsUnavailable() {
+        UpstreamForwardingService service = new UpstreamForwardingService(
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build());
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rl/users/123");
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+            () -> service.forward(request, "http://127.0.0.1:65534", "/users/123"));
+
+        assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
+        assertEquals("Upstream no disponible", exception.getReason());
     }
 }
 

@@ -4,7 +4,7 @@
 >
 > Si queres levantar todo en un solo paso, usa:
 >
-> - `./scripts/dev-up.sh` para levantar entorno + app.
+> - `./scripts/dev-up.sh` para levantar entorno + app + upstream dummy (`8081`).
 > - `./scripts/dev-up-and-test.sh` para levantar, probar y apagar automaticamente.
 
 ## Prerrequisitos
@@ -12,6 +12,8 @@
 - Java 21
 - Maven 3.8+
 - Tener disponible el puerto `6379` para Redis
+- Tener disponible el puerto `8080` para la app
+- (Opcional) Tener disponible el puerto `8081` para un upstream dummy (se puede modificar por config el upstream)
 
 ## Cambiar comportamiento sin escribir configuracion nueva
 
@@ -35,7 +37,9 @@ mvn spring-boot:run
 
 ## 3) Probar forwarding permitido
 
-> Asegurate de tener un upstream corriendo en `http://localhost:8081` o ajusta `rate-limiter-rules.yaml`.
+> Si levantaste con `./scripts/dev-up.sh`, ya hay un upstream dummy en `http://localhost:8081`.
+>
+> Si levantaste manualmente, asegurate de tener un upstream corriendo en `http://localhost:8081` o ajusta `rate-limiter-rules.yaml`.
 
 ```bash
 curl -i "http://localhost:8080/rl/users/123" \

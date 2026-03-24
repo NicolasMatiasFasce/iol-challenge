@@ -62,9 +62,20 @@ public class UpstreamForwardingService {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            LOGGER.error("Upstream forward failed method={} target={} message={}", request.getMethod(), upstreamUri, e.getMessage(), e);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Upstream forward failed", e);
+            Throwable root = rootCause(e);
+            String rootMessage = root.getMessage() == null ? "sin detalle" : root.getMessage();
+            LOGGER.warn("Upstream no disponible method={} target={} errorType={} detail={}",
+                request.getMethod(), upstreamUri, root.getClass().getSimpleName(), rootMessage);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Upstream no disponible", e);
         }
+    }
+
+    private Throwable rootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private URI buildTargetUri(String upstreamUrl, String forwardedPath, String query) {

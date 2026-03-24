@@ -6,7 +6,10 @@ APP_DIR="$ROOT_DIR/iol-challenge"
 RUN_DIR="$ROOT_DIR/.run"
 APP_LOG="$RUN_DIR/app.log"
 APP_PID_FILE="$RUN_DIR/app.pid"
+UPSTREAM_LOG="$RUN_DIR/upstream.log"
+UPSTREAM_PID_FILE="$RUN_DIR/upstream.pid"
 MVN_BIN=""
+PYTHON3_BIN=""
 
 MODE="foreground"
 if [[ "${1:-}" == "--background" ]]; then
@@ -77,6 +80,37 @@ start_redis() {
   exit 1
 }
 
+start_dummy_upstream() {
+  mkdir -p "$RUN_DIR"
+
+  if is_port_open "127.0.0.1" "8081"; then
+    echo "Upstream already reachable on 127.0.0.1:8081"
+    return 0
+  fi
+
+  if [[ -f "$UPSTREAM_PID_FILE" ]]; then
+    local existing_pid
+    existing_pid="$(cat "$UPSTREAM_PID_FILE")"
+    if kill -0 "$existing_pid" >/dev/null 2>&1; then
+      echo "Upstream already running with pid $existing_pid"
+      return 0
+    fi
+  fi
+
+  (
+    cd "$ROOT_DIR"
+    nohup "$PYTHON3_BIN" -m http.server 8081 >"$UPSTREAM_LOG" 2>&1 &
+    echo $! >"$UPSTREAM_PID_FILE"
+  )
+
+  if wait_for_http "http://127.0.0.1:8081" 30 1; then
+    echo "Upstream ready on http://127.0.0.1:8081"
+  else
+    echo "Upstream did not become ready. Check $UPSTREAM_LOG" >&2
+    exit 1
+  fi
+}
+
 start_app_background() {
   mkdir -p "$RUN_DIR"
 
@@ -117,10 +151,13 @@ main() {
   require_cmd docker
   require_cmd mvn
   require_cmd curl
+  require_cmd python3
 
   MVN_BIN="$(resolve_cmd_path mvn)"
+  PYTHON3_BIN="$(resolve_cmd_path python3)"
 
   start_redis
+  start_dummy_upstream
 
   if [[ "$MODE" == "background" ]]; then
     start_app_background
