@@ -13,6 +13,12 @@
 - Maven 3.8+
 - Tener disponible el puerto `6379` para Redis
 
+## Cambiar comportamiento sin escribir configuracion nueva
+
+- Properties base y presets comentados: `iol-challenge/src/main/resources/application.yml`
+- Reglas y presets comentados: `iol-challenge/rate-limiter-rules.yaml`
+- Mecanica: comentar el bloque activo y descomentar el bloque alternativo deseado.
+
 ## 1) Levantar Redis
 
 ```bash

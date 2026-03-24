@@ -11,6 +11,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -18,6 +19,60 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RateLimiterOrchestratorServiceTest {
+
+    @Test
+    void shouldUseRequestPathAsIsWhenPrefixDoesNotMatch() {
+        RateLimitRulesStore rulesStore = mock(RateLimitRulesStore.class);
+        RateLimitDecisionService decisionService = mock(RateLimitDecisionService.class);
+        IdentityExtractor identityExtractor = new IdentityExtractor();
+        RouteNormalizer routeNormalizer = new RouteNormalizer();
+
+        RateLimitPolicy policy = new RateLimitPolicy("GET", "/users/{id}", "http://upstream", 10, 5, "X-Api-Key", FailMode.FAIL_OPEN);
+        when(rulesStore.resolve(eq("GET"), eq("/users/{id}"))).thenReturn(policy);
+        when(decisionService.evaluate(eq("client-a:GET:/users/{id}"), eq(policy))).thenReturn(new RateLimitDecision(true, 10, 9, 0, false));
+
+        RateLimiterOrchestratorService service = new RateLimiterOrchestratorService(
+            properties(),
+            rulesStore,
+            identityExtractor,
+            routeNormalizer,
+            decisionService);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/users/1");
+        request.addHeader("X-Api-Key", "client-a");
+
+        RateLimitOutcome outcome = service.evaluate(request);
+
+        assertEquals("/users/{id}", outcome.normalizedRoute());
+        assertTrue(outcome.allowed());
+    }
+
+    @Test
+    void shouldFallbackIdentityFromXForwardedForWhenApiKeyHeaderIsMissing() {
+        RateLimitRulesStore rulesStore = mock(RateLimitRulesStore.class);
+        RateLimitDecisionService decisionService = mock(RateLimitDecisionService.class);
+        IdentityExtractor identityExtractor = new IdentityExtractor();
+        RouteNormalizer routeNormalizer = new RouteNormalizer();
+
+        RateLimitPolicy policy = new RateLimitPolicy("GET", "/users/{id}", "http://upstream", 10, 5, "X-Api-Key", FailMode.FAIL_OPEN);
+        when(rulesStore.resolve(eq("GET"), eq("/users/{id}"))).thenReturn(policy);
+        when(decisionService.evaluate(eq("200.10.10.1:GET:/users/{id}"), eq(policy))).thenReturn(new RateLimitDecision(true, 10, 9, 0, false));
+
+        RateLimiterOrchestratorService service = new RateLimiterOrchestratorService(
+            properties(),
+            rulesStore,
+            identityExtractor,
+            routeNormalizer,
+            decisionService);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rl/users/1");
+        request.addHeader("X-Forwarded-For", "200.10.10.1, 10.0.0.2");
+
+        RateLimitOutcome outcome = service.evaluate(request);
+
+        assertEquals("200.10.10.1", outcome.identity());
+        verify(decisionService).evaluate(eq("200.10.10.1:GET:/users/{id}"), eq(policy));
+    }
 
     @Test
     void shouldBuildDifferentQuotaKeysForDifferentEndpointsWithSameIdentity() {

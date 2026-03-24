@@ -1,3 +1,11 @@
+# -----------------------------------------------------------------------------
+# Como usar este archivo
+# 1) Deja UN solo bloque activo por vez.
+# 2) Para cambiar comportamiento: comenta el bloque activo y descomenta otro.
+# 3) Mantene consistencia con iol-challenge/rate-limiter-rules.yaml.
+# -----------------------------------------------------------------------------
+
+# Preset activo (v1 recomendado): balanceado
 rate-limiter:
   enabled: true
   endpoint-prefix: /rl
@@ -8,4 +16,28 @@ rate-limiter:
   default-identity-header: X-Api-Key
   default-fail-mode: fail-open
   default-upstream-url: http://localhost:8081
+
+# Preset alternativo: estricto (menos throughput y fail-closed)
+# rate-limiter:
+#   enabled: true
+#   endpoint-prefix: /rl
+#   rules-path: ./rate-limiter-rules.yaml
+#   refresh-interval: 10s
+#   default-capacity: 20
+#   default-refill-rate-per-second: 10
+#   default-identity-header: X-Api-Key
+#   default-fail-mode: fail-closed
+#   default-upstream-url: http://localhost:8081
+
+# Preset alternativo: bypass controlado (sin limitar, util para debugging)
+# rate-limiter:
+#   enabled: false
+#   endpoint-prefix: /rl
+#   rules-path: ./rate-limiter-rules.yaml
+#   refresh-interval: 30s
+#   default-capacity: 100
+#   default-refill-rate-per-second: 50
+#   default-identity-header: X-Api-Key
+#   default-fail-mode: fail-open
+#   default-upstream-url: http://localhost:8081
 

@@ -16,6 +16,7 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class UpstreamForwardingServiceTest {
 
@@ -56,6 +57,28 @@ class UpstreamForwardingServiceTest {
         assertEquals("/users/123?status=active", recordedRequest.getPath());
         assertEquals("client-a", recordedRequest.getHeader("X-Api-Key"));
         assertEquals("{\"a\":1}", recordedRequest.getBody().readUtf8());
+    }
+
+    @Test
+    void shouldPropagateBusinessHeadersAndFilterHopByHopHeadersFromUpstreamResponse() {
+        mockWebServer.enqueue(new MockResponse()
+            .setResponseCode(200)
+            .setBody("ok")
+            .addHeader("X-Upstream-Version", "v1")
+            .addHeader("Connection", "keep-alive")
+            .addHeader("Transfer-Encoding", "chunked"));
+
+        UpstreamForwardingService service = new UpstreamForwardingService(
+            HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build());
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/rl/users/123");
+        String upstreamUrl = mockWebServer.url("/").toString().replaceAll("/$", "");
+
+        ResponseEntity<byte[]> response = service.forward(request, upstreamUrl, "/users/123");
+
+        assertEquals("v1", response.getHeaders().getFirst("X-Upstream-Version"));
+        assertNull(response.getHeaders().getFirst("Connection"));
+        assertNull(response.getHeaders().getFirst("Transfer-Encoding"));
     }
 }
 

@@ -1,3 +1,11 @@
+# -----------------------------------------------------------------------------
+# Como usar este archivo
+# 1) Deja UN solo bloque de reglas activo por vez.
+# 2) Para cambiar: comenta el bloque activo y descomenta otro.
+# 3) Si usas fail-open/fail-closed por regla, debe alinear con application.yml.
+# -----------------------------------------------------------------------------
+
+# Bloque activo (v1 recomendado): regla global balanceada
 rules:
   - name: default
     method: "*"
@@ -7,4 +15,35 @@ rules:
     refillRatePerSecond: 50
     identityHeader: X-Api-Key
     failMode: fail-open
+
+# Bloque alternativo: estricto global
+# rules:
+#   - name: strict-default
+#     method: "*"
+#     route: "*"
+#     upstreamUrl: "http://localhost:8081"
+#     capacity: 20
+#     refillRatePerSecond: 10
+#     identityHeader: X-Api-Key
+#     failMode: fail-closed
+
+# Bloque alternativo: mixto por ruta (ejemplo)
+# rules:
+#   - name: users-soft
+#     method: GET
+#     route: /users/{id}
+#     upstreamUrl: "http://localhost:8081"
+#     capacity: 120
+#     refillRatePerSecond: 60
+#     identityHeader: X-Api-Key
+#     failMode: fail-open
+#
+#   - name: orders-hard
+#     method: POST
+#     route: /orders
+#     upstreamUrl: "http://localhost:8081"
+#     capacity: 15
+#     refillRatePerSecond: 8
+#     identityHeader: X-Api-Key
+#     failMode: fail-closed
 

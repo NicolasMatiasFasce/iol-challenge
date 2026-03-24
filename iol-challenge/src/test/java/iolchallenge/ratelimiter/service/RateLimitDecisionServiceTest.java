@@ -8,11 +8,32 @@ import iolchallenge.ratelimiter.model.RateLimitPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RateLimitDecisionServiceTest {
+
+    @Test
+    void shouldBypassGatewayWhenRateLimiterIsDisabled() {
+        RateLimiterProperties properties = properties(false);
+        AtomicBoolean consumeCalled = new AtomicBoolean(false);
+        TokenBucketGateway gateway = (key, c, r) -> {
+            consumeCalled.set(true);
+            return new TokenBucketGateway.TokenBucketResult(true, 99, 0);
+        };
+        RateLimitDecisionService service = new RateLimitDecisionService(properties, gateway, new SimpleMeterRegistry());
+
+        RateLimitDecision decision = service.evaluate("id:GET:/users/{id}", policy(FailMode.FAIL_OPEN));
+
+        assertTrue(decision.allowed());
+        assertFalse(decision.degraded());
+        assertEquals(10, decision.limit());
+        assertEquals(10, decision.remaining());
+        assertFalse(consumeCalled.get());
+    }
 
     @Test
     void shouldAllowWhenTokenBucketAllows() {
