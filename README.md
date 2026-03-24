@@ -42,3 +42,9 @@ Se eligio el problema de **Rate Limiter** del capitulo 4 (middleware en el medio
 - `scripts/dev-up-and-test.sh`: llama al script anterior y ejecuta pruebas con reporte.
 - `scripts/dev-down.sh`: detiene app/upstream y Redis de forma idempotente; incluye fallback por proceso para app y upstream dummy (`8081`) aunque el `pid` este stale (`--purge` elimina el contenedor Redis).
 
+## 6) Submission checklist (challenge)
+
+- Repository link: `https://github.com/NicolasMatiasFasce/iol-challenge`
+- Problem folder: `rate-limiter/`
+- Design document requested by challenge: `rate-limiter/DESIGN.md`
+

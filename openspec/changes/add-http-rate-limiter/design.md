@@ -54,49 +54,49 @@ This project is redefined as an infrastructure component that sits between clien
    - Decision: `identity` uses `api-key` when present with `client-ip` fallback; alternative modes are supported by configuration.
 
 10. Handling of rate-limited requests in v1: option A (immediate drop).
-   - Rationale: minimizes latency and operational complexity for the challenge.
-   - Decision: when the limit is exceeded, return `429` and drop the request immediately, with no waiting or deferred queue in v1.
-   - Versioning note: v1 uses hard rate limiting; v2 may evolve to a mixed policy-based model.
+    - Rationale: minimizes latency and operational complexity for the challenge.
+    - Decision: when the limit is exceeded, return `429` and drop the request immediately, with no waiting or deferred queue in v1.
+    - Versioning note: v1 uses hard rate limiting; v2 may evolve to a mixed policy-based model.
 
 11. Rule source in v1: option A (disk file + cache-refresh worker).
-   - Rationale: keeps operations simple for the challenge and follows chapter 4 flow (rules on disk, periodic load into cache).
-   - Decision: load rules from a versioned local file, refresh them periodically into in-memory cache, and use the last valid snapshot on parse errors.
+    - Rationale: keeps operations simple for the challenge and follows chapter 4 flow (rules on disk, periodic load into cache).
+    - Decision: load rules from a versioned local file, refresh them periodically into in-memory cache, and use the last valid snapshot on parse errors.
 
 12. Quota scope in v1: option A (identity+endpoint only).
-   - Rationale: simplifies initial configuration and prioritizes fairness by client/route.
-   - Decision: no aggregated global limit is applied in v1; each decision uses key `identity + method + normalizedRoute`.
+    - Rationale: simplifies initial configuration and prioritizes fairness by client/route.
+    - Decision: no aggregated global limit is applied in v1; each decision uses key `identity + method + normalizedRoute`.
 
 13. Quota header emission in v1: option A (only in `429` responses).
-   - Rationale: reduces complexity and serialization overhead for allowed requests.
-   - Decision: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Retry-After` are emitted only when the request is throttled.
+    - Rationale: reduces complexity and serialization overhead for allowed requests.
+    - Decision: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Retry-After` are emitted only when the request is throttled.
 
 14. Rule format on disk for v1: option A (YAML).
-   - Rationale: improves operational readability and stays aligned with chapter 4 examples.
-   - Decision: policies are defined in versioned YAML files on disk and validated on load.
+    - Rationale: improves operational readability and stays aligned with chapter 4 examples.
+    - Decision: policies are defined in versioned YAML files on disk and validated on load.
 
 15. Rule refresh mechanism in v1: option A (periodic polling).
-   - Rationale: it is portable, simple, and predictable enough for the challenge.
-   - Decision: workers update cache at configurable intervals; on read/parse errors, the last valid snapshot is kept.
+    - Rationale: it is portable, simple, and predictable enough for the challenge.
+    - Decision: workers update cache at configurable intervals; on read/parse errors, the last valid snapshot is kept.
 
 16. Startup behavior without valid rules in v1: option C (abort startup).
-   - Rationale: guarantees a deterministic initial state and avoids exposing the system without a defined control policy.
-   - Decision: if no valid snapshot exists at startup, the service does not start; fallback to the last snapshot applies only after successful initialization.
+    - Rationale: guarantees a deterministic initial state and avoids exposing the system without a defined control policy.
+    - Decision: if no valid snapshot exists at startup, the service does not start; fallback to the last snapshot applies only after successful initialization.
 
 17. Runtime stale-snapshot handling in v1: option A (accept indefinitely).
-   - Rationale: prioritizes service continuity during prolonged refresh mechanism failures.
-   - Decision: if successive refreshes fail, the middleware keeps operating with the last valid snapshot without an automatic blocking TTL.
+    - Rationale: prioritizes service continuity during prolonged refresh mechanism failures.
+    - Decision: if successive refreshes fail, the middleware keeps operating with the last valid snapshot without an automatic blocking TTL.
 
 18. `X-RateLimit-Retry-After` calculation in v1: option B (dynamic).
-   - Rationale: provides a more precise retry signal for clients and reduces retry storms.
-   - Decision: for each `429`, `X-RateLimit-Retry-After` is calculated from token deficit and `refillRatePerSecond` of the applied policy.
+    - Rationale: provides a more precise retry signal for clients and reduces retry storms.
+    - Decision: for each `429`, `X-RateLimit-Retry-After` is calculated from token deficit and `refillRatePerSecond` of the applied policy.
 
 19. Route normalization for quota key in v1: option B (templated route).
-   - Rationale: reduces key cardinality without losing endpoint-level granularity.
-   - Decision: `normalizedRoute` uses templated format (for example `/users/{id}/orders/{orderId}`) instead of full literal route.
+    - Rationale: reduces key cardinality without losing endpoint-level granularity.
+    - Decision: `normalizedRoute` uses templated format (for example `/users/{id}/orders/{orderId}`) instead of full literal route.
 
 20. Retry header in v1: option A (only `X-RateLimit-Retry-After`).
-   - Rationale: reduces contract complexity and keeps consistency with the minimum `X-RateLimit-*` set.
-   - Decision: on `429`, emit `X-RateLimit-Retry-After` with a dynamic value.
+    - Rationale: reduces contract complexity and keeps consistency with the minimum `X-RateLimit-*` set.
+    - Decision: on `429`, emit `X-RateLimit-Retry-After` with a dynamic value.
 
 ## Risks / Trade-offs
 
