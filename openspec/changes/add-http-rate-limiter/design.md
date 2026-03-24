@@ -123,6 +123,13 @@ This project is redefined as an infrastructure component that sits between clien
 6. Define v2 roadmap for local cache + central Redis without breaking the HTTP contract.
 7. Rollback: bypass mode (`enabled=false`) to forward without limiting.
 
+## AI Usage
+
+- This solution was developed using a spec-driven development approach with OpenSpec.
+- OpenSpec artifacts were used to drive scope, architecture, and implementation sequencing from proposal to execution.
+- GitHub Copilot was integrated in the development workflow to accelerate drafting, refactoring, and documentation while keeping final technical decisions explicit and reviewed.
+- Main OpenSpec source of truth is under `openspec/`, especially `openspec/specs/` and `openspec/changes/add-http-rate-limiter/`.
+
 ## Open Questions
 
 
