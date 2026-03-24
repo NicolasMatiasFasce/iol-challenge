@@ -8,6 +8,7 @@ APP_LOG="$RUN_DIR/app.log"
 APP_PID_FILE="$RUN_DIR/app.pid"
 UPSTREAM_LOG="$RUN_DIR/upstream.log"
 UPSTREAM_PID_FILE="$RUN_DIR/upstream.pid"
+UPSTREAM_SCRIPT="$ROOT_DIR/scripts/dummy_upstream.py"
 MVN_BIN=""
 PYTHON3_BIN=""
 
@@ -95,17 +96,21 @@ start_dummy_upstream() {
       echo "Upstream already running with pid $existing_pid"
       return 0
     fi
+
+    # Limpia pid stale para evitar confusiones en proximos ciclos.
+    rm -f "$UPSTREAM_PID_FILE"
   fi
 
   (
     cd "$ROOT_DIR"
-    nohup "$PYTHON3_BIN" -m http.server 8081 >"$UPSTREAM_LOG" 2>&1 &
+    nohup "$PYTHON3_BIN" "$UPSTREAM_SCRIPT" >"$UPSTREAM_LOG" 2>&1 &
     echo $! >"$UPSTREAM_PID_FILE"
   )
 
   if wait_for_http "http://127.0.0.1:8081" 30 1; then
     echo "Upstream ready on http://127.0.0.1:8081"
   else
+    rm -f "$UPSTREAM_PID_FILE"
     echo "Upstream did not become ready. Check $UPSTREAM_LOG" >&2
     exit 1
   fi
@@ -155,6 +160,11 @@ main() {
 
   MVN_BIN="$(resolve_cmd_path mvn)"
   PYTHON3_BIN="$(resolve_cmd_path python3)"
+
+  if [[ ! -f "$UPSTREAM_SCRIPT" ]]; then
+    echo "Error: upstream script not found: $UPSTREAM_SCRIPT" >&2
+    exit 1
+  fi
 
   start_redis
   start_dummy_upstream

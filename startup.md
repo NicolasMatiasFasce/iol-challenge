@@ -6,6 +6,7 @@
 >
 > - `./scripts/dev-up.sh` para levantar entorno + app + upstream dummy (`8081`).
 > - `./scripts/dev-up-and-test.sh` para levantar, probar y apagar automaticamente.
+> - `./scripts/dev-down.sh` para apagar app + upstream dummy + Redis.
 
 ## Prerrequisitos
 
@@ -13,7 +14,7 @@
 - Maven 3.8+
 - Tener disponible el puerto `6379` para Redis
 - Tener disponible el puerto `8080` para la app
-- (Opcional) Tener disponible el puerto `8081` para un upstream dummy (se puede modificar por config el upstream)
+- (Recomendado) Tener disponible el puerto `8081` para un upstream dummy (o un upstream real ya escuchando en ese puerto)
 
 ## Cambiar comportamiento sin escribir configuracion nueva
 
@@ -38,6 +39,8 @@ mvn spring-boot:run
 ## 3) Probar forwarding permitido
 
 > Si levantaste con `./scripts/dev-up.sh`, ya hay un upstream dummy en `http://localhost:8081`.
+>
+> Ese upstream dummy responde `200` para metodos HTTP comunes, para simplificar pruebas y evitar errores ruidosos de forwarding.
 >
 > Si levantaste manualmente, asegurate de tener un upstream corriendo en `http://localhost:8081` o ajusta `rate-limiter-rules.yaml`.
 
@@ -67,4 +70,6 @@ Cuando limite, la respuesta debe incluir:
 ```bash
 docker rm -f rl-redis
 ```
+
+> Si levantaste con scripts, preferi `./scripts/dev-down.sh`.
 

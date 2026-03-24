@@ -38,7 +38,7 @@ Se eligio el problema de **Rate Limiter** del capitulo 4 (middleware en el medio
 
 ## 5) Scripts de automatizacion
 
-- `scripts/dev-up.sh`: levanta Redis, un upstream dummy en `8081` y la aplicacion.
+- `scripts/dev-up.sh`: levanta Redis, un upstream dummy en `8081` (responde `200` a metodos comunes) y la aplicacion.
 - `scripts/dev-up-and-test.sh`: llama al script anterior y ejecuta pruebas con reporte.
-- `scripts/dev-down.sh`: detiene app/upstream y Redis de forma idempotente (`--purge` elimina el contenedor Redis).
+- `scripts/dev-down.sh`: detiene app/upstream y Redis de forma idempotente; incluye fallback por proceso para app y upstream dummy (`8081`) aunque el `pid` este stale (`--purge` elimina el contenedor Redis).
 

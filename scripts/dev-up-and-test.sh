@@ -6,7 +6,6 @@ RUN_DIR="$ROOT_DIR/.run"
 REPORT_FILE="$RUN_DIR/test-report.txt"
 RULES_FILE="$ROOT_DIR/iol-challenge/rate-limiter-rules.yaml"
 RULES_BACKUP_FILE="$RUN_DIR/rate-limiter-rules.yaml.bak"
-PYTHON3_BIN=""
 LOAD_PROBE_LIMITED429=0
 SMOKE_HTTP_CODE=""
 LOAD_PROBE_NON429=0
@@ -124,6 +123,9 @@ cleanup() {
 }
 
 configure_strict_rules_for_script() {
+  # Si hubo una corrida interrumpida, primero recupera estado base.
+  restore_rules_if_needed
+
   mkdir -p "$RUN_DIR"
   cp "$RULES_FILE" "$RULES_BACKUP_FILE"
 
@@ -163,31 +165,6 @@ wait_for_http() {
   done
 
   return 1
-}
-
-start_dummy_upstream() {
-  local upstream_pid_file="$RUN_DIR/upstream.pid"
-
-  log_step "Starting dummy upstream on 127.0.0.1:8081"
-
-  if is_port_open "127.0.0.1" "8081"; then
-    log_info "Upstream already reachable on 127.0.0.1:8081"
-    return 0
-  fi
-
-  mkdir -p "$RUN_DIR"
-  (
-    cd "$ROOT_DIR"
-    nohup "$PYTHON3_BIN" -m http.server 8081 >"$RUN_DIR/upstream.log" 2>&1 &
-    echo $! >"$upstream_pid_file"
-  )
-
-  if ! wait_for_http "http://127.0.0.1:8081" 30; then
-    echo "Dummy upstream failed to start" >&2
-    exit 1
-  fi
-
-  log_info "Dummy upstream ready on http://127.0.0.1:8081"
 }
 
 run_forwarding_smoke_check() {
@@ -395,9 +372,6 @@ run_x_forwarded_for_isolation_probe() {
 main() {
   require_cmd bash
   require_cmd curl
-  require_cmd python3
-
-  PYTHON3_BIN="$(resolve_cmd_path python3)"
 
   trap cleanup EXIT
 
@@ -407,9 +381,7 @@ main() {
   append_report "started_at=$(timestamp)"
   configure_strict_rules_for_script
 
-  start_dummy_upstream
-
-  log_step "Starting rate limiter app in background"
+  log_step "Starting rate limiter stack in background (redis + upstream + app)"
   "$ROOT_DIR/scripts/dev-up.sh" --background
 
 

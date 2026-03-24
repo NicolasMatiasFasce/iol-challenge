@@ -43,6 +43,44 @@ stop_pid_if_running() {
   rm -f "$pid_file"
 }
 
+stop_app_fallback() {
+  # Fallback idempotente para procesos de la app si app.pid no existe o quedo stale.
+  local stopped_any="false"
+
+  if pkill -f "mvn -q spring-boot:run" >/dev/null 2>&1; then
+    stopped_any="true"
+  fi
+
+  if pkill -f "iolchallenge.Main" >/dev/null 2>&1; then
+    stopped_any="true"
+  fi
+
+  if [[ "$stopped_any" == "true" ]]; then
+    echo "App stopped by fallback process match"
+  fi
+}
+
+stop_upstream_fallback() {
+  # Fallback idempotente: intenta cerrar upstream dummy aunque falte upstream.pid.
+  local stopped_any="false"
+
+  if pkill -f "scripts/dummy_upstream.py" >/dev/null 2>&1; then
+    stopped_any="true"
+  fi
+
+  if pkill -f "python3 -m http.server 8081" >/dev/null 2>&1; then
+    stopped_any="true"
+  fi
+
+  if pkill -f "python -m http.server 8081" >/dev/null 2>&1; then
+    stopped_any="true"
+  fi
+
+  if [[ "$stopped_any" == "true" ]]; then
+    echo "Upstream stopped by fallback process match on port 8081"
+  fi
+}
+
 stop_redis_container() {
   if docker ps --format '{{.Names}}' | grep -q '^rl-redis$'; then
     docker stop rl-redis >/dev/null
@@ -63,7 +101,9 @@ stop_redis_container() {
 
 main() {
   stop_pid_if_running "$APP_PID_FILE" "App"
+  stop_app_fallback
   stop_pid_if_running "$UPSTREAM_PID_FILE" "Upstream"
+  stop_upstream_fallback
   stop_redis_container
 }
 
