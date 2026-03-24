@@ -4,7 +4,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 REPORT_FILE="$RUN_DIR/test-report.txt"
+RULES_FILE="$ROOT_DIR/iol-challenge/rate-limiter-rules.yaml"
+RULES_BACKUP_FILE="$RUN_DIR/rate-limiter-rules.yaml.bak"
 PYTHON3_BIN=""
+LOAD_PROBE_LIMITED429=0
+SMOKE_HTTP_CODE=""
+LOAD_PROBE_NON429=0
+ENDPOINT_TOTAL_LIMITED429=0
+IDENTITY_TOTAL_LIMITED429=0
+XFF_HOT_LIMITED429=0
 
 timestamp() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
@@ -20,6 +28,19 @@ log_info() {
 
 append_report() {
   echo "$1" >>"$REPORT_FILE"
+}
+
+print_console_summary() {
+  echo
+  echo "================ Test Summary ================"
+  echo "Smoke:                        http_code=${SMOKE_HTTP_CODE}"
+  echo "Load probe (500):             non429=${LOAD_PROBE_NON429} limited429=${LOAD_PROBE_LIMITED429}"
+  echo "Endpoint isolation (500):     total_limited429=${ENDPOINT_TOTAL_LIMITED429} (vs load=${LOAD_PROBE_LIMITED429})"
+  echo "Identity isolation (500):     total_limited429=${IDENTITY_TOTAL_LIMITED429} (vs load=${LOAD_PROBE_LIMITED429})"
+  echo "X-Forwarded-For isolation:    hot_limited429=${XFF_HOT_LIMITED429}"
+  echo "Result:                       PASS"
+  echo "Detailed report:              ${REPORT_FILE}"
+  echo "=============================================="
 }
 
 request_code() {
@@ -97,8 +118,37 @@ is_port_open() {
 }
 
 cleanup() {
+  restore_rules_if_needed
   log_info "Cleaning local environment (app, upstream, redis container)"
   "$ROOT_DIR/scripts/dev-down.sh" >/dev/null 2>&1 || true
+}
+
+configure_strict_rules_for_script() {
+  mkdir -p "$RUN_DIR"
+  cp "$RULES_FILE" "$RULES_BACKUP_FILE"
+
+  cat >"$RULES_FILE" <<'YAML'
+rules:
+  - name: script-strict-default
+    method: "*"
+    route: "*"
+    upstreamUrl: "http://localhost:8081"
+    capacity: 20
+    refillRatePerSecond: 5
+    identityHeader: X-Api-Key
+    failMode: fail-open
+YAML
+
+  append_report "rules_mode=strict-temporary"
+  log_info "Temporary strict rules enabled for script evidence (capacity=20, refill=5)"
+}
+
+restore_rules_if_needed() {
+  if [[ -f "$RULES_BACKUP_FILE" ]]; then
+    cp "$RULES_BACKUP_FILE" "$RULES_FILE"
+    rm -f "$RULES_BACKUP_FILE"
+    log_info "Original rules restored"
+  fi
 }
 
 wait_for_http() {
@@ -150,6 +200,7 @@ run_forwarding_smoke_check() {
   append_report "Smoke forwarding"
   append_report "identity=$smoke_identity"
   append_report "http_code=$code"
+  SMOKE_HTTP_CODE="$code"
 
   if [[ "$code" == "000" ]]; then
     echo "Smoke forwarding failed: app or upstream unreachable (HTTP 000)." >&2
@@ -165,27 +216,16 @@ run_forwarding_smoke_check() {
 }
 
 run_http_probe() {
-  local bursts=5
-  local burst_size=80
-  local total=$((bursts * burst_size))
+  local total=500
+  local concurrency=120
+  local minimum_limited=80
   local ok=0
   local limited=0
   local probe_identity="probe-$(date +%s)-$$"
   local codes_file
-  codes_file="$(mktemp)"
+  codes_file="$(generate_codes_file "GET" "/rl/users/123" "$total" "$concurrency" "X-Api-Key: $probe_identity")"
 
   log_step "Load probe: stressing limiter to observe throttle behavior (429)"
-
-  # Envia rafagas concurrentes para superar capacidad/refill y observar 429.
-  for _ in $(seq 1 "$bursts"); do
-    for _ in $(seq 1 "$burst_size"); do
-      {
-        curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8080/rl/users/123" -H "X-Api-Key: $probe_identity"
-        echo
-      } >>"$codes_file" &
-    done
-    wait
-  done
 
   while IFS= read -r code; do
     if [[ "$code" == "429" ]]; then
@@ -203,12 +243,16 @@ run_http_probe() {
   append_report "identity=$probe_identity"
   append_report "non429=$ok"
   append_report "limited429=$limited"
+  append_report "minimum_limited429_expected=$minimum_limited"
 
   log_info "Load probe completed (total=$total, non429=$ok, limited429=$limited)"
+  LOAD_PROBE_LIMITED429="$limited"
+  LOAD_PROBE_NON429="$ok"
 
-  if [[ "$limited" -lt 1 ]]; then
-    echo "HTTP probe warning: no 429 responses observed (check rules/config)." >&2
-    append_report "warning=no_429_observed"
+  if [[ "$limited" -lt "$minimum_limited" ]]; then
+    echo "HTTP probe failed: expected at least $minimum_limited responses 429, got $limited." >&2
+    append_report "error=insufficient_429_in_load_probe"
+    return 1
   fi
 }
 
@@ -220,33 +264,42 @@ run_endpoint_isolation_probe() {
   local control_codes_file
   local hot_limited
   local control_limited
+  local total_requests=500
+  local half_requests=250
+  local total_limited
 
   log_step "Isolation probe: endpoint A load should not affect endpoint B"
 
-  hot_codes_file="$(generate_codes_file "GET" "$hot_path" 320 40 "X-Api-Key: $identity")"
+  hot_codes_file="$(generate_codes_file "GET" "$hot_path" "$half_requests" 120 "X-Api-Key: $identity")"
   hot_limited="$(count_code "$hot_codes_file" "429")"
   rm -f "$hot_codes_file"
 
-  control_codes_file="$(generate_codes_file "GET" "$control_path" 40 10 "X-Api-Key: $identity")"
+  control_codes_file="$(generate_codes_file "GET" "$control_path" "$half_requests" 120 "X-Api-Key: $identity")"
   control_limited="$(count_code "$control_codes_file" "429")"
   rm -f "$control_codes_file"
+  total_limited=$((hot_limited + control_limited))
 
   append_report ""
   append_report "Endpoint isolation probe"
   append_report "identity=$identity"
+  append_report "total_requests=$total_requests"
   append_report "hot_path=$hot_path"
   append_report "hot_path_limited429=$hot_limited"
   append_report "control_path=$control_path"
   append_report "control_path_limited429=$control_limited"
+  append_report "total_limited429=$total_limited"
+  append_report "load_probe_limited429_reference=$LOAD_PROBE_LIMITED429"
 
-  log_info "Endpoint isolation completed (hot_limited429=$hot_limited, control_limited429=$control_limited)"
+  log_info "Endpoint isolation completed (hot_limited429=$hot_limited, control_limited429=$control_limited, total_limited429=$total_limited)"
+  ENDPOINT_TOTAL_LIMITED429="$total_limited"
 
-  if [[ "$hot_limited" -lt 1 ]]; then
-    append_report "warning=endpoint_isolation_hot_path_no_429"
+  if [[ "$total_limited" -lt 1 ]]; then
+    echo "Endpoint isolation failed: expected at least one 429 across 500 requests." >&2
+    return 1
   fi
 
-  if [[ "$control_limited" -gt 0 ]]; then
-    echo "Endpoint isolation failed: control endpoint returned 429 unexpectedly." >&2
+  if [[ "$total_limited" -ge "$LOAD_PROBE_LIMITED429" ]]; then
+    echo "Endpoint isolation failed: expected fewer 429 than load probe (load=$LOAD_PROBE_LIMITED429, endpoint_isolation=$total_limited)." >&2
     return 1
   fi
 }
@@ -259,33 +312,42 @@ run_identity_isolation_probe() {
   local control_codes_file
   local hot_limited
   local control_limited
+  local total_requests=500
+  local half_requests=250
+  local total_limited
 
   log_step "Isolation probe: identity A load should not affect identity B"
 
-  hot_codes_file="$(generate_codes_file "GET" "$path" 320 40 "X-Api-Key: $hot_identity")"
+  hot_codes_file="$(generate_codes_file "GET" "$path" "$half_requests" 120 "X-Api-Key: $hot_identity")"
   hot_limited="$(count_code "$hot_codes_file" "429")"
   rm -f "$hot_codes_file"
 
-  control_codes_file="$(generate_codes_file "GET" "$path" 40 10 "X-Api-Key: $control_identity")"
+  control_codes_file="$(generate_codes_file "GET" "$path" "$half_requests" 120 "X-Api-Key: $control_identity")"
   control_limited="$(count_code "$control_codes_file" "429")"
   rm -f "$control_codes_file"
+  total_limited=$((hot_limited + control_limited))
 
   append_report ""
   append_report "Identity isolation probe"
+  append_report "total_requests=$total_requests"
   append_report "path=$path"
   append_report "hot_identity=$hot_identity"
   append_report "hot_identity_limited429=$hot_limited"
   append_report "control_identity=$control_identity"
   append_report "control_identity_limited429=$control_limited"
+  append_report "total_limited429=$total_limited"
+  append_report "load_probe_limited429_reference=$LOAD_PROBE_LIMITED429"
 
-  log_info "Identity isolation completed (hot_limited429=$hot_limited, control_limited429=$control_limited)"
+  log_info "Identity isolation completed (hot_limited429=$hot_limited, control_limited429=$control_limited, total_limited429=$total_limited)"
+  IDENTITY_TOTAL_LIMITED429="$total_limited"
 
-  if [[ "$hot_limited" -lt 1 ]]; then
-    append_report "warning=identity_isolation_hot_identity_no_429"
+  if [[ "$total_limited" -lt 1 ]]; then
+    echo "Identity isolation failed: expected at least one 429 across 500 requests." >&2
+    return 1
   fi
 
-  if [[ "$control_limited" -gt 0 ]]; then
-    echo "Identity isolation failed: control identity returned 429 unexpectedly." >&2
+  if [[ "$total_limited" -ge "$LOAD_PROBE_LIMITED429" ]]; then
+    echo "Identity isolation failed: expected fewer 429 than load probe (load=$LOAD_PROBE_LIMITED429, identity_isolation=$total_limited)." >&2
     return 1
   fi
 }
@@ -301,11 +363,11 @@ run_x_forwarded_for_isolation_probe() {
 
   log_step "Isolation probe: X-Forwarded-For identity fallback should isolate clients"
 
-  hot_codes_file="$(generate_codes_file "GET" "$path" 320 40 "X-Forwarded-For: $hot_ip")"
+  hot_codes_file="$(generate_codes_file "GET" "$path" 700 120 "X-Forwarded-For: $hot_ip")"
   hot_limited="$(count_code "$hot_codes_file" "429")"
   rm -f "$hot_codes_file"
 
-  control_codes_file="$(generate_codes_file "GET" "$path" 40 10 "X-Forwarded-For: $control_ip")"
+  control_codes_file="$(generate_codes_file "GET" "$path" 10 5 "X-Forwarded-For: $control_ip")"
   control_limited="$(count_code "$control_codes_file" "429")"
   rm -f "$control_codes_file"
 
@@ -318,6 +380,7 @@ run_x_forwarded_for_isolation_probe() {
   append_report "control_ip_limited429=$control_limited"
 
   log_info "X-Forwarded-For isolation completed (hot_limited429=$hot_limited, control_limited429=$control_limited)"
+  XFF_HOT_LIMITED429="$hot_limited"
 
   if [[ "$hot_limited" -lt 1 ]]; then
     append_report "warning=xff_isolation_hot_ip_no_429"
@@ -342,6 +405,7 @@ main() {
   : >"$REPORT_FILE"
   append_report "Integration run"
   append_report "started_at=$(timestamp)"
+  configure_strict_rules_for_script
 
   start_dummy_upstream
 
@@ -368,7 +432,7 @@ main() {
   append_report "completed_at=$(timestamp)"
 
   log_info "Test report generated at $REPORT_FILE"
-  cat "$REPORT_FILE"
+  print_console_summary
 }
 
 main "$@"
