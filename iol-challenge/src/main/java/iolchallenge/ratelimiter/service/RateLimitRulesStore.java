@@ -38,9 +38,6 @@ public class RateLimitRulesStore {
     private final AtomicLong lastRefreshEpochMillis = new AtomicLong(0);
     private final Counter refreshErrors;
 
-    /**
-     * Inicializa el store de reglas y registra metricas de estado del snapshot.
-     */
     public RateLimitRulesStore(RateLimiterProperties properties, MeterRegistry meterRegistry) {
         this.properties = properties;
         this.yamlMapper = new ObjectMapper(new YAMLFactory());

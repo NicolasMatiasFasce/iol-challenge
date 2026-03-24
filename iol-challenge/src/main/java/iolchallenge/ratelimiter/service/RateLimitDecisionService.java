@@ -20,9 +20,6 @@ public class RateLimitDecisionService {
     private final Counter allowedCounter;
     private final Counter limitedCounter;
 
-    /**
-     * Inicializa el servicio de decision de cuota y registra las metricas principales.
-     */
     public RateLimitDecisionService(
         RateLimiterProperties properties,
         TokenBucketGateway tokenBucketGateway,
@@ -37,8 +34,8 @@ public class RateLimitDecisionService {
     /**
      * Evalua si una request puede continuar segun la politica de cuota.
      *
-     * <p>Cuando el backend de cuota falla, aplica la degradacion configurada
-     * en la politica (fail-open o fail-closed).</p>
+     * Cuando el backend de cuota falla, aplica la degradacion configurada
+     * en la politica (fail-open o fail-closed).
      */
     public RateLimitDecision evaluate(String quotaKey, RateLimitPolicy policy) {
         if (!properties.enabled()) {

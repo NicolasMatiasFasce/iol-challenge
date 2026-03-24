@@ -54,9 +54,6 @@ public class RedisTokenBucketGateway implements TokenBucketGateway {
     private final StringRedisTemplate redisTemplate;
     private final RedisScript<List> script;
 
-    /**
-     * Inicializa el gateway Redis y compila el script Lua atomico del token bucket.
-     */
     public RedisTokenBucketGateway(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
         this.script = new DefaultRedisScript<>(LUA_SCRIPT, List.class);

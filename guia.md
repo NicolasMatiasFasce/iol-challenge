@@ -211,4 +211,6 @@ Logs relevantes:
   - Levanta Redis y la app.
 - `scripts/dev-up-and-test.sh`
   - Llama a `dev-up.sh`, ejecuta pruebas automaticas y genera reporte.
+- `scripts/dev-down.sh`
+  - Detiene y limpia recursos de desarrollo.
 

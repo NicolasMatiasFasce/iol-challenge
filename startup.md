@@ -5,7 +5,7 @@
 > Si queres levantar todo en un solo paso, usa:
 >
 > - `./scripts/dev-up.sh` para levantar entorno + app + upstream dummy (`8081`).
-> - `./scripts/dev-up-and-test.sh` para levantar, probar y apagar automaticamente.
+> - `./scripts/dev-up-and-test.sh` para levantar, ejecutar pruebas y apagar automaticamente.
 > - `./scripts/dev-down.sh` para apagar app + upstream dummy + Redis.
 
 ## Prerrequisitos
@@ -59,17 +59,11 @@ for i in {1..150}; do
 done
 ```
 
-Cuando limite, la respuesta debe incluir:
-
-- `X-RateLimit-Limit`
-- `X-RateLimit-Remaining`
-- `X-RateLimit-Retry-After`
-
 ## 5) Apagar Redis de prueba
 
 ```bash
 docker rm -f rl-redis
 ```
 
-> Si levantaste con scripts, preferi `./scripts/dev-down.sh`.
+> Si levantaste con scripts, es mejor usar `./scripts/dev-down.sh`.
 

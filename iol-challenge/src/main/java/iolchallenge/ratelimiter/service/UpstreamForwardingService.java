@@ -29,9 +29,6 @@ public class UpstreamForwardingService {
 
     private final HttpClient httpClient;
 
-    /**
-     * Inicializa el servicio encargado de reenviar requests al upstream.
-     */
     public UpstreamForwardingService(@Qualifier("rateLimiterHttpClient") HttpClient httpClient) {
         this.httpClient = httpClient;
     }
